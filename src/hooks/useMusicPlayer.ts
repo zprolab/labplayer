@@ -45,9 +45,50 @@ export const useMusicPlayer = () => {
     }
   }, []);
 
-  // Load music files from folder
+  // Save listening data to file
+  const saveListeningData = useCallback(async () => {
+    try {
+      const allRecords = JSON.parse(localStorage.getItem('allListeningRecords') || '[]');
+      const blob = new Blob([JSON.stringify(allRecords, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'listening_data.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to save listening data:', error);
+    }
+  }, []);
+
+  // Load music files and listening data from folder
   const loadMusicFolder = useCallback(async (files: FileList) => {
     setState(prev => ({ ...prev, isLoading: true }));
+    
+    // Try to find and load listening data first
+    const dataFile = Array.from(files).find(file => file.name === 'listening_data.json');
+    if (dataFile) {
+      try {
+        const text = await dataFile.text();
+        const records = JSON.parse(text);
+        localStorage.setItem('allListeningRecords', JSON.stringify(records));
+        
+        // Restore individual song records
+        records.forEach((record: ListeningRecord) => {
+          const songKey = `listen_${record.songPath}`;
+          const existingRecords = JSON.parse(localStorage.getItem(songKey) || '[]');
+          existingRecords.push(record);
+          localStorage.setItem(songKey, JSON.stringify(existingRecords));
+        });
+        
+        console.log('Listening data loaded successfully');
+      } catch (error) {
+        console.error('Failed to load listening data:', error);
+      }
+    }
     
     const musicFiles = Array.from(files).filter(file => 
       file.type.startsWith('audio/') || 
@@ -126,6 +167,14 @@ export const useMusicPlayer = () => {
   const nextSong = useCallback(() => {
     if (state.playlist.length === 0) return;
 
+    // Save current song's listening time before switching
+    if (state.currentSong && state.isPlaying) {
+      const currentListenTime = (Date.now() - startTimeRef.current) / 1000;
+      const totalListenTime = listenTimeRef.current + currentListenTime;
+      saveListeningTime(state.currentSong, totalListenTime);
+      listenTimeRef.current = 0;
+    }
+
     let nextIndex = 0;
     const currentIndex = state.playlist.findIndex(song => song.id === state.currentSong?.id);
 
@@ -143,6 +192,14 @@ export const useMusicPlayer = () => {
   // Previous song
   const previousSong = useCallback(() => {
     if (state.playlist.length === 0) return;
+
+    // Save current song's listening time before switching
+    if (state.currentSong && state.isPlaying) {
+      const currentListenTime = (Date.now() - startTimeRef.current) / 1000;
+      const totalListenTime = listenTimeRef.current + currentListenTime;
+      saveListeningTime(state.currentSong, totalListenTime);
+      listenTimeRef.current = 0;
+    }
 
     let prevIndex = 0;
     const currentIndex = state.playlist.findIndex(song => song.id === state.currentSong?.id);
@@ -185,11 +242,13 @@ export const useMusicPlayer = () => {
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
           audioRef.current.play();
+          startTimeRef.current = Date.now(); // Reset start time for next play
         }
-        setState(prev => ({ ...prev, isPlaying: true }));
+        setState(prev => ({ ...prev, isPlaying: true, currentTime: 0 }));
       } else {
         nextSong();
-        setState(prev => ({ ...prev, isPlaying: true }));
+        startTimeRef.current = Date.now(); // Reset start time for next song
+        setState(prev => ({ ...prev, isPlaying: true, currentTime: 0 }));
       }
     };
 
@@ -249,13 +308,14 @@ export const useMusicPlayer = () => {
   // Select a specific song from playlist
   const selectSong = useCallback((song: Song) => {
     // Save listening time for current song before switching
-    if (state.currentSong && listenTimeRef.current > 0) {
+    if (state.currentSong) {
       const currentListenTime = state.isPlaying ? (Date.now() - startTimeRef.current) / 1000 : 0;
       const totalListenTime = listenTimeRef.current + currentListenTime;
       saveListeningTime(state.currentSong, totalListenTime);
       listenTimeRef.current = 0;
     }
 
+    startTimeRef.current = Date.now();
     setState(prev => ({ ...prev, currentSong: song, isPlaying: true }));
   }, [state.currentSong, state.isPlaying, saveListeningTime]);
 
@@ -287,5 +347,6 @@ export const useMusicPlayer = () => {
     seekTo,
     selectSong,
     getListeningStats,
+    saveListeningData,
   };
 };
