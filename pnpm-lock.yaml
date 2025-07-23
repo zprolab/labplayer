@@ -179,13 +179,13 @@ devDependencies:
     specifier: ^10.4.20
     version: 10.4.21(postcss@8.5.3)
   electron:
-    specifier: ^32.3.3
+    specifier: ^32.0.0
     version: 32.3.3
   electron-builder:
-    specifier: ^25.1.8
+    specifier: ^25.0.0
     version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
   eslint:
-    specifier: ^9.26.0
+    specifier: ^9.9.0
     version: 9.26.0
   eslint-plugin-react-hooks:
     specifier: ^5.1.0-rc.0
